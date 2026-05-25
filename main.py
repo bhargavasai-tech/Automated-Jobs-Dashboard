@@ -74,10 +74,21 @@ def _init_experience_threshold():
 
 
 def main():
-    """Run forever — one cycle every INTERVAL minutes."""
+    """
+    Run one cycle (cron / RUN_ONCE=true) or loop forever (local dev).
+    Set RUN_ONCE=true in Render Cron Job environment.
+    """
     logger.info("🎯 TalentRadar Agent starting up...")
     init_db()
     _init_experience_threshold()
+
+    run_once = os.environ.get("RUN_ONCE", "false").lower() == "true"
+
+    if run_once:
+        logger.info("⚙️  RUN_ONCE mode — single cycle then exit")
+        run_cycle()
+        logger.info("✅ Done.")
+        return
 
     while True:
         try:
