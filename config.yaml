@@ -1,0 +1,66 @@
+# ── TalentRadar Configuration ──────────────────────────────
+
+project:
+  name: TalentRadar
+  version: 1.0.0
+
+resumes:
+  aiml: resumes/Bhargava_AIML_Resume.pdf
+  devops: resumes/Bhargava_DevOps_resume.pdf
+  general: resumes/Bhargava_Engineer.pdf
+
+scoring:
+  urgent: 85        # 85+ = apply immediately
+  review: 70        # 70-84 = worth reviewing
+  skip: 69          # below 70 = skip
+
+scraping:
+  interval_minutes: 30
+  max_jobs_per_query: 10
+  posted_within_hours: 24
+  queries:
+    aiml:
+      - fresher machine learning engineer hyderabad
+      - entry level data analyst hyderabad
+      - junior AI engineer india
+      - fresher data scientist hyderabad
+      - entry level NLP engineer india
+    devops:
+      - fresher devops engineer hyderabad
+      - junior cloud engineer india
+      - entry level AWS engineer hyderabad
+      - fresher site reliability engineer india
+      - junior kubernetes engineer india
+
+blacklist:
+  companies:
+    - Axis Bank
+    - Capgemini
+    - HCL
+    - Wipro
+    - Tech Mahindra
+    - Infosys BPM
+  roles:
+    - sales executive
+    - telecaller
+    - field sales
+    - insurance
+    - relationship officer
+    - data entry
+    - teacher
+    - counselor
+    - civil engineer
+    - marketing executive
+
+dashboard:
+  host: 0.0.0.0
+  port: 5000
+  debug: true
+
+database:
+  # Connection string read from DATABASE_URL in .env
+  # Format: postgresql://user:password@host:5432/talentradar
+
+logging:
+  level: INFO
+  file: logs/talentrada.log
