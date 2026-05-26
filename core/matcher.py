@@ -264,12 +264,16 @@ def score_job(job: dict) -> dict | None:
             raw = response.choices[0].message.content.strip()
             break
         except Exception as e:
-            if "429" in str(e) and attempt < 2:
-                wait = 30 * (attempt + 1)
-                logger.warning(f"⏳ Rate limited — waiting {wait}s before retry {attempt + 2}/3")
+            err_str = str(e).lower()
+            is_rate_limit = "429" in str(e)
+            is_connection_err = any(x in err_str for x in ("connection", "timeout", "network", "ssl"))
+            
+            if (is_rate_limit or is_connection_err) and attempt < 2:
+                wait = 60 * (attempt + 1)  # 60s, then 120s
+                logger.warning(f"⏳ {'Rate limited' if is_rate_limit else 'Connection error'} — waiting {wait}s before retry {attempt + 2}/3")
                 time.sleep(wait)
-            elif "429" in str(e):
-                logger.warning(f"⏳ Rate limited after 3 attempts — skipping '{title}'")
+            elif is_rate_limit or is_connection_err:
+                logger.warning(f"⏳ Failed after 3 attempts — skipping '{title}': {e}")
                 return None
             else:
                 raise
