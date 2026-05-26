@@ -11,7 +11,7 @@ resp = requests.get(url, headers=headers, timeout=20)
 print(f"Status: {resp.status_code}")
 
 soup = BeautifulSoup(resp.text, "lxml")
-cards = soup.select("[class*='job-card']") or soup.select("[class*='JobCard']") or soup.select(".card")
+cards = soup.select("div.jdbigCard") or soup.select("[class*='job-card']") or soup.select("[class*='JobCard']") or soup.select(".card")
 print(f"Found {len(cards)} cards")
 
 for i, card in enumerate(cards[:3]):
@@ -34,6 +34,6 @@ for i, card in enumerate(cards[:3]):
         if el:
             print(f"  {sel}: {el.get('datetime', '') or el.get_text(strip=True)}")
     
-    # Print raw card HTML for first card
+    # Print full card HTML for first card
     if i == 0:
-        print(f"\n  Raw card text (first 500 chars): {card.get_text(strip=True)[:500]}")
+        print(f"\n  Raw card HTML:\n{card.prettify()[:1000]}")
