@@ -5,7 +5,7 @@ project:
   version: 1.0.0
 
 resumes:
-  aiml: resumes/Bhargava_AIML_Resume.pdf
+  aiml: resumes/bhargava_AIML_Resume.pdf
   devops: resumes/Bhargava_DevOps_resume.pdf
   general: resumes/Bhargava_Engineer.pdf
 

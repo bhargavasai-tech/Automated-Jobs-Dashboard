@@ -241,13 +241,13 @@ def score_job(job: dict) -> dict | None:
     # ── Guard: skip if JD says 3+ years required ───────────
     if jd_text and _jd_requires_experience(jd_text):
         logger.info(f"⏭️  Skipping '{title}' — JD requires 3+ yrs experience")
-        return None
+        return "SKIP"   # deliberate skip, not an API failure
 
     resume_text, resume_name = _get_resume_text(resume_type)
 
     if not resume_text:
         logger.error(f"❌ No resume text found for type: {resume_type}")
-        return None
+        return "SKIP"   # deliberate skip, not an API failure
 
     prompt = _build_prompt(job, resume_text)
 
@@ -358,12 +358,14 @@ def score_all(jobs: list[dict], max_per_cycle: int = 30) -> list[dict]:
         logger.info(f"Scoring job {i}/{total}: {job.get('title', '?')}")
         try:
             result = score_job(job)
-            if result:
+            if isinstance(result, dict):
                 job.update(result)
                 scored.append(job)
                 rate_limit_hits = 0          # reset on success
                 time.sleep(5)                # ~10 req/min, safe under 20k TPM
-            else:
+            elif result == "SKIP":
+                pass                         # deliberate skip — don't penalise quota counter
+            else:                            # None = actual API/rate-limit failure
                 rate_limit_hits += 1
                 if rate_limit_hits >= 3:
                     logger.warning("⚠️  3 consecutive rate-limit failures — quota exhausted. Stopping scoring for this cycle.")

@@ -512,8 +512,11 @@ def _is_fresher_exp(exp_str: str) -> bool:
     threshold = _MAX_EXP_YEARS          # e.g. 1 for fresher, 2 for 1-yr exp candidate
     if mn >= threshold:
         return False                    # min experience already above our level
+    # If min is 0 (freshers welcome), keep regardless of max range
+    if mn == 0:
+        return True
     if mx is not None and mx > threshold:
-        return False                    # range exceeds our level (e.g. 0-3 when threshold=1)
+        return False                    # range starts above 0 and exceeds our level
     return True
 
 
