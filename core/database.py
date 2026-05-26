@@ -15,6 +15,38 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 
+def _time_ago(iso_str: str | None) -> str:
+    """Convert ISO datetime to human readable 'time ago' string."""
+    if not iso_str:
+        return ""
+    try:
+        # Parse ISO format
+        dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+        now = datetime.now(dt.tzinfo)
+        diff = now - dt
+        
+        seconds = diff.total_seconds()
+        if seconds < 60:
+            return "just now"
+        elif seconds < 3600:
+            minutes = int(seconds / 60)
+            return f"{minutes} min ago" if minutes == 1 else f"{minutes} mins ago"
+        elif seconds < 86400:
+            hours = int(seconds / 3600)
+            return f"{hours} hour ago" if hours == 1 else f"{hours} hours ago"
+        elif seconds < 604800:
+            days = int(seconds / 86400)
+            return f"{days} day ago" if days == 1 else f"{days} days ago"
+        elif seconds < 2592000:
+            weeks = int(seconds / 604800)
+            return f"{weeks} week ago" if weeks == 1 else f"{weeks} weeks ago"
+        else:
+            months = int(seconds / 2592000)
+            return f"{months} month ago" if months == 1 else f"{months} months ago"
+    except Exception:
+        return ""
+
+
 def get_conn():
     """Open a new PostgreSQL connection (dict row factory)."""
     return psycopg.connect(DATABASE_URL, row_factory=dict_row)
@@ -41,7 +73,8 @@ def init_db():
             recommendation TEXT,
             status         TEXT DEFAULT 'pending',
             scraped_at     TEXT,
-            scored_at      TEXT
+            scored_at      TEXT,
+            posted_at      TEXT
         )
     """)
     cur.execute("""
@@ -68,10 +101,10 @@ def save_job(job: dict) -> bool:
         cur.execute("""
             INSERT INTO jobs (
                 title, company, location, platform,
-                url, jd_text, resume_used, scraped_at
+                url, jd_text, resume_used, scraped_at, posted_at
             ) VALUES (
                 %(title)s, %(company)s, %(location)s, %(platform)s,
-                %(url)s, %(jd_text)s, %(resume_type)s, %(scraped_at)s
+                %(url)s, %(jd_text)s, %(resume_type)s, %(scraped_at)s, %(posted_at)s
             )
         """, job)
         conn.commit()
@@ -157,6 +190,8 @@ def get_all_jobs(status=None, platform=None, resume_type=None, min_score=60, lim
                     job[field] = []
             elif val is None:
                 job[field] = []
+        # Add human readable posted time
+        job["posted_ago"] = _time_ago(job.get("posted_at"))
         jobs.append(job)
     return jobs
 

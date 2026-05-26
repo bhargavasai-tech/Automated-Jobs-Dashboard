@@ -395,6 +395,7 @@
                     <div>
                         <h4 class="font-headline-sm text-[20px] text-primary font-bold leading-tight tracking-tight">${job.title}</h4>
                         <p class="text-on-surface-variant font-body-sm mt-1">${job.company} <span class="mx-1 opacity-40">•</span> ${job.location}</p>
+                        ${job.posted_ago ? `<p class="text-[11px] text-on-surface-variant/70 font-label-md mt-0.5">${job.posted_ago}</p>` : ''}
                     </div>
                     <div class="flex flex-col items-end gap-1">
                         <span class="px-2 py-0.5 bg-primary text-white text-[9px] font-label-md uppercase tracking-widest">${job.status}</span>
