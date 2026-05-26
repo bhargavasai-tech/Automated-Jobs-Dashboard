@@ -313,39 +313,77 @@
     }
 
     // ── Load Jobs from Flask API ─────────────────────────
-    function loadJobs() {
-        fetch('/api/jobs')
-            .then(r => r.json())
-            .then(data => {
-                // Normalize API data to match renderJobs format
-                allJobs = data.map(job => ({
-                    id:      job.id,
-                    title:   job.title   || 'Unknown Role',
-                    company: job.company || 'Unknown',
-                    location: job.location || '—',
-                    platform: job.platform || 'unknown',
-                    type:    (() => { const r = job.resume_used || job.resume_type || ''; if (r === 'aiml') return 'AI/ML'; if (r === 'devops') return 'DevOps'; return 'General'; })(),
-                    match:   job.score   || 0,
-                    status:  job.score_bucket || 'skip',
-                    url:     job.url     || '#',
-                    applied: job.status  === 'applied',
-                    skills: {
-                        matched: Array.isArray(job.matched_skills) ? job.matched_skills : [],
-                        missing: Array.isArray(job.missing_skills) ? job.missing_skills : []
-                    },
-                    recommendation: job.recommendation || ''
-                }));
-                applyFilters();
-                updateInteractiveListeners();
-            })
-            .catch(err => {
-                console.error('Jobs fetch failed:', err);
-                document.getElementById('jobs-grid').innerHTML = `
-                    <div class="col-span-full py-xl text-center">
-                        <p class="text-on-surface-variant font-body-lg">SYSTEM: No jobs found. Run the agent to scrape jobs.</p>
-                    </div>`;
-            });
-    }
+function loadJobs() {
+    fetch('/api/jobs')
+        .then(r => r.json())
+        .then(data => {
+
+            // Normalize API data to match renderJobs format
+            allJobs = data.map(job => ({
+
+                id: job.id,
+
+                title: job.title || 'Unknown Role',
+
+                company: job.company || 'Unknown',
+
+                location: job.location || '—',
+
+                // ✅ FIX ADDED HERE
+                posted_ago: job.posted_ago || '',
+                posted_at: job.posted_at || '',
+
+                platform: job.platform || 'unknown',
+
+                type: (() => {
+                    const r = job.resume_used || job.resume_type || '';
+
+                    if (r === 'aiml') return 'AI/ML';
+
+                    if (r === 'devops') return 'DevOps';
+
+                    return 'General';
+                })(),
+
+                match: job.score || 0,
+
+                status: job.score_bucket || 'skip',
+
+                url: job.url || '#',
+
+                applied: job.status === 'applied',
+
+                skills: {
+                    matched: Array.isArray(job.matched_skills)
+                        ? job.matched_skills
+                        : [],
+
+                    missing: Array.isArray(job.missing_skills)
+                        ? job.missing_skills
+                        : []
+                },
+
+                recommendation: job.recommendation || ''
+            }));
+
+            applyFilters();
+
+            updateInteractiveListeners();
+        })
+
+        .catch(err => {
+
+            console.error('Jobs fetch failed:', err);
+
+            document.getElementById('jobs-grid').innerHTML = `
+                <div class="col-span-full py-xl text-center">
+                    <p class="text-on-surface-variant font-body-lg">
+                        SYSTEM: No jobs found. Run the agent to scrape jobs.
+                    </p>
+                </div>
+            `;
+        });
+}
 
     // ── Stats Rendering ───────────────────────────────────
     const statFilters = ['all', 'urgent', 'aiml', 'devops', 'applied'];
@@ -395,8 +433,10 @@
                     <div>
                         <h4 class="font-headline-sm text-[20px] text-primary font-bold leading-tight tracking-tight">${job.title}</h4>
                         <p class="text-on-surface-variant font-body-sm mt-1">${job.company} <span class="mx-1 opacity-40">•</span> ${job.location}</p>
-                        ${job.posted_ago ? `<p class="text-[11px] text-on-surface-variant/70 font-label-md mt-0.5">${job.posted_ago}</p>` : ''}
-                    </div>
+                        ${(job.posted_ago || job.posted_at) ? `
+                        <p class="text-[11px] text-on-surface-variant/70 font-label-md mt-0.5">
+                            ${job.posted_ago || job.posted_at}
+                        </p>` : ''}                    </div>
                     <div class="flex flex-col items-end gap-1">
                         <span class="px-2 py-0.5 bg-primary text-white text-[9px] font-label-md uppercase tracking-widest">${job.status}</span>
                         <span class="text-[10px] text-on-surface-variant/60 font-label-md">${job.type}</span>
