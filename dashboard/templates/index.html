@@ -502,18 +502,18 @@
                     recommendation: job.recommendation || ''
                 }));
                 applyFilters();
-                loadStats();
                 updateInteractiveListeners();
             });
     }
 
-    // ── Calculate Stats Dynamically on Frontend ──────────
-    function loadStats() {
-        const total   = allJobs.length;
-        const urgent  = allJobs.filter(j => j.match >= 85).length;
-        const aiml    = allJobs.filter(j => j.type === 'AI/ML').length;
-        const devops  = allJobs.filter(j => j.type === 'DevOps').length;
-        const applied = allJobs.filter(j => j.applied === true).length;
+    // ── Calculate Stats from VISIBLE jobs (always exact match) ──
+    function loadStats(visibleJobs) {
+        const jobs    = visibleJobs !== undefined ? visibleJobs : allJobs;
+        const total   = jobs.length;
+        const urgent  = jobs.filter(j => j.match >= 85).length;
+        const aiml    = jobs.filter(j => j.type === 'AI/ML').length;
+        const devops  = jobs.filter(j => j.type === 'DevOps').length;
+        const applied = jobs.filter(j => j.applied === true).length;
 
         const stats = [
             { label: "TOTAL JOBS",      value: total,   icon: "radar",                color: "#000000" },
@@ -580,7 +580,6 @@ function loadJobs() {
             }));
 
             applyFilters();
-            loadStats();
             updateInteractiveListeners();
         })
 
@@ -706,16 +705,8 @@ function loadJobs() {
             const job = allJobs.find(j => j.id === id);
             if (job) job.applied = true;
 
-            // Update button UI without full re-render
-            const btn = document.getElementById(`btn-${id}`);
-            if (btn) {
-                btn.textContent = 'Applied';
-                btn.classList.add('bg-primary/5', 'text-primary/40', 'border-primary/20', 'pointer-events-none');
-                btn.classList.remove('border-primary', 'text-primary');
-            }
-
-            // Refresh stats counter
-            loadStats();
+            // Refresh view
+            applyFilters();
         })
         .catch(err => console.error('Mark applied failed:', err));
     }
@@ -737,6 +728,7 @@ function loadJobs() {
             return matchesSearch && matchesFilter;
         });
         renderJobs(filtered);
+        loadStats(filtered);
     }
 
     document.getElementById('job-search').addEventListener('input', (e) => {
