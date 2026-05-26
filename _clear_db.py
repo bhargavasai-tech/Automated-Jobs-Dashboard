@@ -3,7 +3,7 @@ from core.database import get_conn
 conn = get_conn()
 cur = conn.cursor()
 
-# Truncate tables to delete all data and reset sequences
+# Truncate tables to delete all data and reset sequence
 cur.execute("TRUNCATE TABLE jobs RESTART IDENTITY CASCADE;")
 cur.execute("TRUNCATE TABLE runs RESTART IDENTITY CASCADE;")
 conn.commit()
