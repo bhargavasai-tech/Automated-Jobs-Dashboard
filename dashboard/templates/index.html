@@ -475,7 +475,7 @@
 
     // Separate loadJobs that returns a Promise
     function loadJobsAndReturn() {
-        return fetch('/api/jobs')
+        return fetch('/api/jobs?t=' + Date.now())
             .then(r => r.json())
             .then(data => {
                 allJobs = data.map(job => ({
@@ -527,7 +527,7 @@
 
     // ── Load Jobs from Flask API ─────────────────────────
 function loadJobs() {
-    fetch('/api/jobs')
+    fetch('/api/jobs?t=' + Date.now())
         .then(r => r.json())
         .then(data => {
 
