@@ -26,7 +26,9 @@ SCORING    = _cfg["scoring"]
 RESUME_MAP = _cfg["resumes"]
 
 # ── Groq client ─────────────────────────────────────────────
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+# Use custom httpx client with longer timeouts for CI/GitHub Actions stability
+_http_client = httpx.Client(timeout=httpx.Timeout(30.0, connect=15.0))
+client = Groq(api_key=os.getenv("GROQ_API_KEY"), http_client=_http_client)
 
 
 # ── Resume cache (read each PDF once) ─────────────────────
