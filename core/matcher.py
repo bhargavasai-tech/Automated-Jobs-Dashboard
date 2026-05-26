@@ -373,8 +373,17 @@ def score_all(jobs: list[dict], max_per_cycle: int = 30) -> list[dict]:
                 logger.info(f"⏳ Quota recovery wait 60s before next job...")
                 time.sleep(60)               # let the 1-min quota window reset
         except Exception as e:
-            logger.warning(f"⚠️ Scoring error: {e}")
-            break
+            err = str(e).lower()
+            if any(x in err for x in ("connection", "timeout", "network", "ssl")):
+                rate_limit_hits += 1
+                logger.warning(f"⚠️ Transient error (attempt {rate_limit_hits}/3): {e}")
+                if rate_limit_hits >= 3:
+                    logger.warning("⚠️  3 consecutive failures — stopping scoring for this cycle.")
+                    break
+                time.sleep(30)
+            else:
+                logger.warning(f"⚠️ Scoring error: {e}")
+                break
 
     logger.info(f"✅ Scored {len(scored)}/{total} jobs successfully")
     return scored
