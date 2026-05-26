@@ -178,17 +178,17 @@
 <span class="material-symbols-outlined text-vibrant-blue text-headline-sm" data-icon="terminal">terminal</span>
 <h1 class="font-headline-md text-headline-sm font-bold text-white tracking-tight">Talent<span class="text-vibrant-blue">Radar</span></h1>
 <div class="hidden md:flex gap-xs ml-6">
-<span class="px-2 py-0.5 border border-white/20 text-white text-[10px] font-label-md rounded uppercase tracking-widest">AI/ML</span>
-<span class="px-2 py-0.5 border border-white/20 text-white text-[10px] font-label-md rounded uppercase tracking-widest">DevOps</span>
+<!-- <span class="px-2 py-0.5 border border-white/20 text-white text-[10px] font-label-md rounded uppercase tracking-widest">AI/ML</span>
+<span class="px-2 py-0.5 border border-white/20 text-white text-[10px] font-label-md rounded uppercase tracking-widest">DevOps</span> -->
 </div>
 </div>
 <nav class="hidden md:flex items-center gap-md">
 <a class="text-white font-semibold border-b-2 border-vibrant-blue pb-1 text-label-md" href="#">DASHBOARD</a>
 </nav>
 <div class="flex items-center gap-base">
-<span class="material-symbols-outlined text-white/70 cursor-pointer hover:text-white interactive" data-icon="search">search</span>
-<span class="material-symbols-outlined text-white/70 cursor-pointer hover:text-white interactive" data-icon="notifications">notifications</span>
-<span class="material-symbols-outlined text-white/70 cursor-pointer hover:text-white interactive" data-icon="account_circle">account_circle</span>
+<!-- <span class="material-symbols-outlined text-white/70 cursor-pointer hover:text-white interactive" data-icon="search">search</span> -->
+<!-- <span class="material-symbols-outlined text-white/70 cursor-pointer hover:text-white interactive" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined text-white/70 cursor-pointer hover:text-white interactive" data-icon="account_circle">account_circle</span> -->
 </div>
 </div>
 </header>
@@ -330,7 +330,7 @@ function loadJobs() {
                 location: job.location || '—',
 
                 // ✅ FIX ADDED HERE
-                posted_ago: job.posted_ago || '',
+
                 posted_at: job.posted_at || '',
 
                 platform: job.platform || 'unknown',
@@ -433,10 +433,7 @@ function loadJobs() {
                     <div>
                         <h4 class="font-headline-sm text-[20px] text-primary font-bold leading-tight tracking-tight">${job.title}</h4>
                         <p class="text-on-surface-variant font-body-sm mt-1">${job.company} <span class="mx-1 opacity-40">•</span> ${job.location}</p>
-                        ${(job.posted_ago || job.posted_at) ? `
-                        <p class="text-[11px] text-on-surface-variant/70 font-label-md mt-0.5">
-                            ${job.posted_ago || job.posted_at}
-                        </p>` : ''}                    </div>
+                    </div>
                     <div class="flex flex-col items-end gap-1">
                         <span class="px-2 py-0.5 bg-primary text-white text-[9px] font-label-md uppercase tracking-widest">${job.status}</span>
                         <span class="text-[10px] text-on-surface-variant/60 font-label-md">${job.type}</span>

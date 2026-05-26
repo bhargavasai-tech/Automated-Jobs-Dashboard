@@ -12,6 +12,7 @@ import httpx
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 from dotenv import load_dotenv
+from playwright.sync_api import sync_playwright
 from core.filters import is_blacklisted, is_relevant_tech_job
 
 load_dotenv()
@@ -25,17 +26,67 @@ _CUTOFF_HOURS      = POSTED_WITHIN_HRS
 
 
 def _is_recent(date_text: str) -> bool:
+    """Return True if the given date string is within the configured POSTED_WITHIN_HRS.
+    Handles various relative formats ("just now", "2 hours ago", "1 day ago", "yesterday"),
+    ISO datetime strings, and generic numeric+unit patterns.
+    """
+    if not date_text:
+        return False
+
+    text = date_text.lower().strip()
+
+    # Quick recognitions for very recent postings
+    if any(k in text for k in ("just now", "moments ago", "now", "seconds ago", "second ago", "today")):
+        return True
+    if "yesterday" in text:
+        return _CUTOFF_HOURS >= 24
+
+    # Try ISO datetime parsing first
+    try:
+        dt = datetime.fromisoformat(text.replace("z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=_CUTOFF_HOURS)
+        return dt >= cutoff
+    except ValueError:
+        pass
+
+    # Generic numeric + unit patterns (e.g., "2 hrs ago", "3d", "5 weeks ago")
+    m = re.search(r"(\d+)\s*(seconds?|second|minutes?|minute|hrs?|hr|hours?|hour|days?|day|weeks?|week|months?|month|h|m|d|w|mo)", text)
+    if m:
+        n = int(m.group(1))
+        unit = m.group(2)
+        # Convert to hours for comparison
+        if unit.startswith('second'):
+            hours_ago = n / 3600
+        elif unit.startswith('minute') or unit.startswith('min') or unit == 'm':
+            hours_ago = n / 60
+        elif unit.startswith('hour') or unit.startswith('hr') or unit == 'h':
+            hours_ago = n
+        elif unit.startswith('day') or unit == 'd':
+            hours_ago = n * 24
+        elif unit.startswith('week') or unit == 'w':
+            hours_ago = n * 168
+        elif unit.startswith('month') or unit == 'mo':
+            hours_ago = n * 720
+        else:
+            hours_ago = n
+        return hours_ago <= _CUTOFF_HOURS
+
+    # If all parsing fails, treat as not recent
+    return False
     """
     Returns True if the date string is within POSTED_WITHIN_HRS.
     Handles: 'Just now', '1 hour ago', '2 days ago', '3d ago', 'Yesterday',
              'Posted X days ago', ISO strings.
-    Returns True (keep job) when date cannot be parsed.
+    If date cannot be parsed, returns FALSE (be strict) unless it's a known 'recent' string.
     """
     if not date_text:
-        return True
+        return False  # Strict: if no date, skip it
+    
     text = date_text.lower().strip()
 
-    if any(x in text for x in ("just now", "moments ago", "today")):
+    if any(x in text for x in ("just now", "moments ago", "today", "1 hour ago", "2 hours ago")):
         return True
     if "yesterday" in text:
         return _CUTOFF_HOURS >= 24
@@ -62,7 +113,7 @@ def _is_recent(date_text: str) -> bool:
         else:                         hours_ago = n / 60   # minutes
         return hours_ago <= _CUTOFF_HOURS
 
-    return True   # can't parse → keep
+    return False  # Strict: can't parse → skip
 
 # ── Dynamic experience threshold (updated at startup from resume) ────
 _MAX_EXP_YEARS: float = 1.0   # default: fresher (0-1 yr)
@@ -128,6 +179,9 @@ def scrape_all(queries: dict, max_per_query: int = 10) -> list[dict]:
 
     logger.info(f"Total jobs scraped: {len(all_jobs)}")
     return all_jobs
+
+
+
 
 
 def _scrape_linkedin(query: str, max_jobs: int, resume_type: str) -> list[dict]:
@@ -282,10 +336,20 @@ def _scrape_shine(query: str, max_jobs: int, resume_type: str) -> list[dict]:
                                card.select_one("span[class*='ago']") or
                                card.select_one("span[class*='date']") or
                                card.select_one("div[class*='Date']") or
-                               card.select_one("div[class*='posted']"))
+                               card.select_one("div[class*='posted']") or
+                               card.select_one(".jobCardNova_bigCardTopTitleHeading__Rj2sC")) # Fallback
                 posted_text = ""
                 if date_el:
                     posted_text = date_el.get("datetime", "") or date_el.get_text(strip=True)
+                
+                # If still empty, try searching for "ago" in any child span
+                if not posted_text:
+                    for span in card.find_all("span"):
+                        t = span.get_text(strip=True)
+                        if "ago" in t.lower() or "today" in t.lower():
+                            posted_text = t
+                            break
+
                 if not _is_recent(posted_text):
                     logger.debug(f"Skipping old Shine job ({posted_text}): {title}")
                     continue
@@ -416,6 +480,13 @@ def _scrape_internshala(query: str, max_jobs: int, resume_type: str) -> list[dic
                                    card.select_one(".posted_by_container span") or
                                    card.select_one("div[class*='date']"))
                     posted_text = date_el.get_text(strip=True) if date_el else ""
+                    
+                    if not posted_text:
+                        for span in card.find_all("span"):
+                            t = span.get_text(strip=True)
+                            if "ago" in t.lower() or "today" in t.lower():
+                                posted_text = t
+                                break
                     if not _is_recent(posted_text):
                         logger.debug(f"Skipping old Internshala job ({posted_text}): {title}")
                         continue
@@ -442,6 +513,8 @@ def _scrape_internshala(query: str, max_jobs: int, resume_type: str) -> list[dic
             logger.error(f"Internshala scrape failed ({url}): {e}")
 
     return []
+
+
 
 def _parse_posted_date(raw: dict) -> datetime | None:
     """
