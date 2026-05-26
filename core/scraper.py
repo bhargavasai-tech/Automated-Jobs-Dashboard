@@ -12,7 +12,6 @@ import httpx
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 from dotenv import load_dotenv
-from playwright.sync_api import sync_playwright
 from core.filters import is_blacklisted, is_relevant_tech_job
 
 load_dotenv()
@@ -75,45 +74,6 @@ def _is_recent(date_text: str) -> bool:
 
     # If all parsing fails, treat as not recent
     return False
-    """
-    Returns True if the date string is within POSTED_WITHIN_HRS.
-    Handles: 'Just now', '1 hour ago', '2 days ago', '3d ago', 'Yesterday',
-             'Posted X days ago', ISO strings.
-    If date cannot be parsed, returns FALSE (be strict) unless it's a known 'recent' string.
-    """
-    if not date_text:
-        return False  # Strict: if no date, skip it
-    
-    text = date_text.lower().strip()
-
-    if any(x in text for x in ("just now", "moments ago", "today", "1 hour ago", "2 hours ago")):
-        return True
-    if "yesterday" in text:
-        return _CUTOFF_HOURS >= 24
-
-    # Try ISO / absolute datetime first
-    try:
-        dt = datetime.fromisoformat(text.replace("z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=_CUTOFF_HOURS)
-        return dt >= cutoff
-    except ValueError:
-        pass
-
-    # Relative strings: "2 days ago", "3d ago", "Posted 2 days ago"
-    m = re.search(r"(\d+)\s*(?:d\b|day|hour|hr|minute|min|second|week|month)", text)
-    if m:
-        n    = int(m.group(1))
-        unit = m.group(0)[len(m.group(1)):].strip().lower()
-        if unit.startswith("d"):     hours_ago = n * 24
-        elif unit.startswith("w"):   hours_ago = n * 168
-        elif unit.startswith("mo"):  hours_ago = n * 720
-        elif unit.startswith("h") or unit.startswith("hr"): hours_ago = n
-        else:                         hours_ago = n / 60   # minutes
-        return hours_ago <= _CUTOFF_HOURS
-
-    return False  # Strict: can't parse → skip
 
 # ── Dynamic experience threshold (updated at startup from resume) ────
 _MAX_EXP_YEARS: float = 1.0   # default: fresher (0-1 yr)
@@ -176,6 +136,10 @@ def scrape_all(queries: dict, max_per_query: int = 10) -> list[dict]:
             # ── Internshala ──────────────────────────────────
             internshala_jobs = _scrape_internshala(query, max_per_query, resume_type)
             all_jobs.extend(internshala_jobs)
+
+            # ── Freshersworld ────────────────────────────
+            fw_jobs = _scrape_freshersworld(query, max_per_query, resume_type)
+            all_jobs.extend(fw_jobs)
 
     logger.info(f"Total jobs scraped: {len(all_jobs)}")
     return all_jobs
@@ -302,12 +266,15 @@ def _scrape_shine(query: str, max_jobs: int, resume_type: str) -> list[dict]:
         soup  = BeautifulSoup(resp.text, "lxml")
         cards = soup.select("div.jdbigCard")[:max_jobs]
 
+        if not cards:
+            logger.warning(f"Shine | No job cards found for: {query}")
+            return []
+
         jobs = []
         for card in cards:
             try:
                 title_el   = card.select_one("h3[itemprop='name'] a")
                 company_el = card.select_one("span[class*='TitleName']")
-                exp_el     = card.select_one("div[class*='Experience']")
 
                 if not title_el:
                     continue
@@ -319,35 +286,38 @@ def _scrape_shine(query: str, max_jobs: int, resume_type: str) -> list[dict]:
                 if job_url and not job_url.startswith("http"):
                     job_url = "https://www.shine.com" + job_url
 
-                # Experience — try multiple selectors
+                # ── Experience — use confirmed live selectors ───────────
+                # Real class: jdbigCardExperience (stable part), text e.g. "0 Yrs", "0 to 4 Yrs"
                 exp_raw = ""
-                for exp_sel in ["div[class*='Experience']", "div[class*='exp']",
-                                "span[class*='exp']", ".exp", ".experience"]:
-                    el = card.select_one(exp_sel)
-                    if el:
-                        exp_raw = el.get_text(strip=True)
-                        break
+                exp_el  = (card.select_one(".jdbigCardExperience") or
+                           card.select_one("span[class*='CenterListExp']") or
+                           card.select_one("div[class*='Experience']"))
+                if exp_el:
+                    exp_raw = exp_el.get_text(strip=True)
                 if not _is_fresher_exp(exp_raw):
                     logger.debug(f"Skipping exp range '{exp_raw}': {title}")
                     continue
 
-                # ── date filter ─────────────────────────────
-                date_el     = (card.select_one("time") or
+                # ── Date — use confirmed live selector ──────────────────
+                # Real class: jobCardNova_postedData__* (stable part: postedData)
+                # Text format: "posted2 months ago" (no space — normalize it)
+                date_el     = (card.select_one("span[class*='postedData']") or
+                               card.select_one("time") or
                                card.select_one("span[class*='ago']") or
-                               card.select_one("span[class*='date']") or
-                               card.select_one("div[class*='Date']") or
-                               card.select_one("div[class*='posted']") or
-                               card.select_one(".jobCardNova_bigCardTopTitleHeading__Rj2sC")) # Fallback
+                               card.select_one("span[class*='date']")
+                               )
                 posted_text = ""
                 if date_el:
-                    posted_text = date_el.get("datetime", "") or date_el.get_text(strip=True)
-                
-                # If still empty, try searching for "ago" in any child span
+                    raw = date_el.get("datetime", "") or date_el.get_text(strip=True)
+                    # Normalize "posted2 months ago" → "2 months ago"
+                    posted_text = re.sub(r'^posted\s*', '', raw, flags=re.IGNORECASE).strip()
+
+                # Fallback: scan all spans for ago/today/yesterday
                 if not posted_text:
                     for span in card.find_all("span"):
-                        t = span.get_text(strip=True)
-                        if "ago" in t.lower() or "today" in t.lower():
-                            posted_text = t
+                        t = span.get_text(strip=True).lower()
+                        if any(k in t for k in ("ago", "today", "yesterday", "just now")):
+                            posted_text = re.sub(r'^posted\s*', '', span.get_text(strip=True), flags=re.IGNORECASE).strip()
                             break
 
                 if not _is_recent(posted_text):
@@ -515,8 +485,145 @@ def _scrape_internshala(query: str, max_jobs: int, resume_type: str) -> list[dic
     return []
 
 
+def _scrape_freshersworld(query: str, max_jobs: int, resume_type: str) -> list[dict]:
+    """Scrape Freshersworld.com — India's largest fresher-focused job portal.
+    Uses confirmed live selectors from live page inspection.
+    Card:    .job-container
+    Title:   .job-new-title .seo_title
+    Company: h3.company-name
+    Date:    span.ago-text  (e.g. '2 hours ago', '3 days ago')
+    Exp:     .job-details-span containing Years
+    Link:    first <a> in card pointing to /jobs/
+    """
+    BASE = "https://www.freshersworld.com"
+    # Build search URL — Freshersworld uses city-keyword slug pattern
+    # Normalize query: "fresher machine learning engineer hyderabad" -> "Machine-Learning-jobs-in-Hyderabad"
+    query_lower = query.lower()
+    # Detect location (last word if it's a known city, else blank)
+    city = ""
+    for known_city in ["hyderabad", "bangalore", "bengaluru", "mumbai", "delhi", "chennai", "pune", "india"]:
+        if known_city in query_lower:
+            city = known_city.capitalize()
+            query_lower = query_lower.replace(known_city, "").strip()
+            break
+
+    # Build keyword slug (remove common filler words)
+    stopwords = {"fresher", "entry", "level", "junior", "jobs", "job", "in", "at", "for", "india", "engineer", ""}
+    kw_parts  = [w.capitalize() for w in query_lower.split() if w not in stopwords]
+    kw_slug   = "-".join(kw_parts) if kw_parts else "Software"
+
+    slug = f"{kw_slug}-jobs-in-{city}" if city else f"{kw_slug}-jobs"
+    url  = f"{BASE}/jobs/jobsearch/{slug}"
+
+    try:
+        headers = {
+            "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept-Language": "en-IN,en;q=0.9",
+            "Accept":          "text/html,application/xhtml+xml,*/*;q=0.8",
+            "Referer":         "https://www.freshersworld.com/",
+        }
+        resp = httpx.get(url, headers=headers, timeout=20, follow_redirects=True)
+
+        if resp.status_code != 200:
+            logger.warning(f"Freshersworld | HTTP {resp.status_code} for: {query}")
+            return []
+
+        soup  = BeautifulSoup(resp.text, "lxml")
+        cards = soup.select(".job-container")[:max_jobs]
+
+        if not cards:
+            logger.warning(f"Freshersworld | No cards found for: {query}")
+            return []
+
+        jobs = []
+        for card in cards:
+            try:
+                # ── Title ──────────────────────────────────────────────
+                title_el = card.select_one(".seo_title") or card.select_one(".job-new-title a")
+                if not title_el:
+                    continue
+                title = title_el.get_text(strip=True)
+                # Remove trailing "Less" / "More" noise from title spans
+                title = re.sub(r'\s*(Less|More)\s*$', '', title).strip()
+
+                # ── Company ────────────────────────────────────────────
+                company_el = card.select_one("h3.company-name") or card.select_one(".company-name")
+                company    = company_el.get_text(strip=True) if company_el else "Unknown"
+
+                # ── Location ───────────────────────────────────────────
+                loc_el   = card.select_one(".job-location") or card.select_one("[class*='location']")
+                location = loc_el.get_text(strip=True) if loc_el else city or "India"
+
+                # ── Link ───────────────────────────────────────────────
+                link_el = card.select_one("a[href*='/jobs/']")
+                job_url = ""
+                if link_el:
+                    href = link_el.get("href", "")
+                    job_url = href if href.startswith("http") else BASE + href
+
+                # ── Experience ─────────────────────────────────────────
+                # Freshersworld shows text like "0 Years", "0 to 1 Years", "0.6 to 3+ Years"
+                exp_raw = ""
+                for span in card.select(".job-details-span"):
+                    t = span.get_text(strip=True)
+                    if "year" in t.lower() or "yr" in t.lower():
+                        exp_raw = t
+                        break
+                if not _is_fresher_exp(exp_raw):
+                    logger.debug(f"Freshersworld skipping exp '{exp_raw}': {title}")
+                    continue
+
+                # ── Title keyword filter ───────────────────────────────
+                if any(kw in title.lower() for kw in EXPERIENCE_KEYWORDS):
+                    logger.debug(f"Freshersworld skipping experienced role: {title}")
+                    continue
+
+                if not is_relevant_tech_job(title):
+                    continue
+                if is_blacklisted(title, company)[0]:
+                    continue
+
+                if not title or not job_url:
+                    continue
+
+                # ── Date ───────────────────────────────────────────────
+                # Confirmed selector: span.ago-text -> "2 hours ago", "3 days ago"
+                date_el     = card.select_one("span.ago-text") or card.select_one(".text-ago")
+                posted_text = ""
+                if date_el:
+                    posted_text = date_el.get_text(strip=True)
+                    # strip "Posted:" prefix if any
+                    posted_text = re.sub(r'^posted\s*:?\s*', '', posted_text, flags=re.IGNORECASE).strip()
+
+                if not _is_recent(posted_text):
+                    logger.debug(f"Freshersworld skipping old job ({posted_text}): {title}")
+                    continue
+
+                jobs.append({
+                    "title":       title,
+                    "company":     company,
+                    "location":    location or city or "India",
+                    "platform":    "freshersworld",
+                    "url":         job_url,
+                    "jd_text":     "",
+                    "resume_type": resume_type,
+                    "scraped_at":  datetime.utcnow().isoformat(),
+                    "posted_at":   posted_text or None,
+                })
+
+            except Exception as e:
+                logger.debug(f"Freshersworld card error: {e}")
+
+        logger.info(f"FRESHERSWORLD | {len(jobs)} clean jobs for: {query}")
+        return jobs
+
+    except Exception as e:
+        logger.error(f"Freshersworld scrape failed for '{query}': {e}")
+        return []
+
 
 def _parse_posted_date(raw: dict) -> datetime | None:
+
     """
     Try to extract a UTC-aware posted datetime from raw Apify job dict.
     Handles ISO strings and relative strings like '1 hour ago', '3 days ago'.

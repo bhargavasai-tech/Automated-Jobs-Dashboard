@@ -105,6 +105,88 @@
 <style>
         body { background-color: #f9f9f9; font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
         .header-bg { background-color: #000000; transition: opacity 0.8s ease-out, transform 0.8s ease-out; }
+
+        /* ── New Jobs Refresh Button ─────────────────────── */
+        #new-jobs-btn {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            border-radius: 2px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        #new-jobs-btn.btn-disabled {
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(255,255,255,0.15);
+            color: rgba(255,255,255,0.35);
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        #new-jobs-btn.btn-active {
+            background: #007BFF;
+            border-color: #007BFF;
+            color: #ffffff;
+            box-shadow: 0 0 20px rgba(0,123,255,0.4);
+            animation: pulse-glow 2s infinite;
+        }
+        #new-jobs-btn.btn-active:hover {
+            background: #0066dd;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 24px rgba(0,123,255,0.5);
+        }
+        #new-jobs-btn.btn-loading {
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(255,255,255,0.15);
+            color: rgba(255,255,255,0.5);
+            cursor: wait;
+            pointer-events: none;
+        }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 12px rgba(0,123,255,0.4); }
+            50%       { box-shadow: 0 0 28px rgba(0,123,255,0.7); }
+        }
+        .btn-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: currentColor;
+            flex-shrink: 0;
+        }
+        .btn-dot.pulsing {
+            background: #4ade80;
+            animation: dot-pulse 1.4s infinite;
+        }
+        .btn-dot.running {
+            background: #facc15;
+            animation: dot-spin 1s linear infinite;
+            border-radius: 1px;
+        }
+        @keyframes dot-pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50%       { opacity: 0.4; transform: scale(0.6); }
+        }
+        @keyframes dot-spin {
+            to { transform: rotate(360deg); }
+        }
+        .cycle-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px; height: 16px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.25);
+            font-size: 9px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
         
         .cursor-dot {
             width: 6px; height: 6px; background-color: #007BFF;
@@ -189,6 +271,11 @@
 <!-- <span class="material-symbols-outlined text-white/70 cursor-pointer hover:text-white interactive" data-icon="search">search</span> -->
 <!-- <span class="material-symbols-outlined text-white/70 cursor-pointer hover:text-white interactive" data-icon="notifications">notifications</span>
 <span class="material-symbols-outlined text-white/70 cursor-pointer hover:text-white interactive" data-icon="account_circle">account_circle</span> -->
+    <button id="new-jobs-btn" class="btn-disabled interactive" onclick="loadNewCycleJobs()" title="New jobs will appear here when the next scraping cycle completes">
+        <span class="btn-dot running" id="btn-dot"></span>
+        <span id="btn-label">Scanning...</span>
+        <span class="cycle-badge" id="cycle-badge" style="display:none"></span>
+    </button>
 </div>
 </div>
 </header>
@@ -235,6 +322,12 @@
     let allJobs = [];
     let searchQuery = '';
     let currentFilter = 'all';
+
+    // ── Cycle / Run-status state ─────────────────────────
+    let _lastKnownCycle   = 0;   // cycle count when page first loaded
+    let _lastFinishedAt   = null; // ISO string of last completed cycle
+    let _cycleCheckTimer  = null;
+    let _newCycleReady    = false;
 
     // Cursor Logic (unchanged)
     const dot = document.getElementById('cursor-dot');
@@ -284,8 +377,135 @@
         setTimeout(() => {
             loadStats();
             loadJobs();
+            // Show the button and start polling for new cycles
+            document.getElementById('new-jobs-btn').style.display = 'flex';
+            checkRunStatus(true); // initial check
+            _cycleCheckTimer = setInterval(() => checkRunStatus(false), 30000); // every 30s
         }, 400);
     });
+
+    // ── Run-status polling ───────────────────────────────
+    function checkRunStatus(isInitial) {
+        fetch('/api/run-status')
+            .then(r => r.json())
+            .then(data => {
+                const btn      = document.getElementById('new-jobs-btn');
+                const dot      = document.getElementById('btn-dot');
+                const label    = document.getElementById('btn-label');
+                const badge    = document.getElementById('cycle-badge');
+                const status   = data.status;   // 'running' | 'done' | 'idle'
+                const cycle    = data.cycle || 0;
+                const finished = data.finished_at;
+
+                if (isInitial) {
+                    // Snapshot the current state so we can detect future completions
+                    _lastKnownCycle = cycle;
+                    _lastFinishedAt = finished;
+                }
+
+                if (status === 'running') {
+                    // A cycle is actively running — disable button
+                    _newCycleReady = false;
+                    btn.className = 'btn-disabled interactive';
+                    dot.className = 'btn-dot running';
+                    label.textContent = 'Scanning...';
+                    badge.style.display = 'none';
+
+                } else if (status === 'done' || status === 'idle') {
+                    // Check if a NEW cycle just completed (cycle count increased)
+                    const isNewCycle = !isInitial && (
+                        cycle > _lastKnownCycle ||
+                        (finished && finished !== _lastFinishedAt)
+                    );
+
+                    if (isNewCycle) {
+                        // New cycle is done — activate button
+                        _newCycleReady   = true;
+                        _lastKnownCycle  = cycle;
+                        _lastFinishedAt  = finished;
+
+                        btn.className = 'btn-active interactive';
+                        dot.className = 'btn-dot pulsing';
+                        label.textContent = 'New Jobs Ready';
+                        badge.textContent = cycle;
+                        badge.style.display = 'inline-flex';
+
+                    } else if (isInitial && status === 'done') {
+                        // On first load — show a neutral idle state (already up to date)
+                        btn.className = 'btn-disabled interactive';
+                        dot.className = 'btn-dot';
+                        dot.style.background = '#6b7280';
+                        label.textContent = 'Up to date';
+                        badge.style.display = 'none';
+                    }
+                }
+            })
+            .catch(() => { /* silently ignore network errors */ });
+    }
+
+    // ── Load new cycle jobs when button clicked ───────────
+    function loadNewCycleJobs() {
+        if (!_newCycleReady) return;
+        _newCycleReady = false;
+
+        const btn   = document.getElementById('new-jobs-btn');
+        const dot   = document.getElementById('btn-dot');
+        const label = document.getElementById('btn-label');
+        const badge = document.getElementById('cycle-badge');
+
+        // Show loading state
+        btn.className = 'btn-loading interactive';
+        dot.className = 'btn-dot running';
+        label.textContent = 'Loading...';
+        badge.style.display = 'none';
+
+        // Re-fetch both stats and jobs
+        Promise.all([loadStats(), loadJobsAndReturn()])
+            .then(() => {
+                // Back to idle / up-to-date state
+                btn.className = 'btn-disabled interactive';
+                dot.className = 'btn-dot';
+                dot.style.background = '#6b7280';
+                label.textContent = 'Up to date';
+            })
+            .catch(() => {
+                btn.className = 'btn-disabled interactive';
+                label.textContent = 'Error — retry';
+            });
+    }
+
+    // Separate loadJobs that returns a Promise
+    function loadJobsAndReturn() {
+        return fetch('/api/jobs')
+            .then(r => r.json())
+            .then(data => {
+                allJobs = data.map(job => ({
+                    id: job.id,
+                    title: job.title || 'Unknown Role',
+                    company: job.company || 'Unknown',
+                    location: job.location || '—',
+                    posted_at: job.posted_at || '',
+                    platform: job.platform || 'unknown',
+                    type: (() => {
+                        const r = job.resume_used || job.resume_type || '';
+                        if (r === 'aiml') return 'AI/ML';
+                        if (r === 'devops') return 'DevOps';
+                        return 'General';
+                    })(),
+                    match: job.score || 0,
+                    status: job.score_bucket || 'skip',
+                    url: job.url || '#',
+                    applied: job.status === 'applied',
+                    skills: {
+                        matched: Array.isArray(job.matched_skills) ? job.matched_skills : [],
+                        missing: Array.isArray(job.missing_skills) ? job.missing_skills : []
+                    },
+                    recommendation: job.recommendation || ''
+                }));
+                applyFilters();
+                updateInteractiveListeners();
+            });
+    }
 
     // ── Load Stats from Flask API ────────────────────────
     function loadStats() {

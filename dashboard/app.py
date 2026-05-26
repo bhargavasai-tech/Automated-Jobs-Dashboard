@@ -62,7 +62,7 @@ def api_stats():
 #   status      = pending | applied | skipped
 #   platform    = linkedin | shine | internshala
 #   min_score   = float  (default 60)
-#   limit       = int    (default 50)
+#   limit       = int    (default 30)
 @app.route("/api/jobs")
 def api_jobs():
     """All jobs with optional filters."""
@@ -72,7 +72,7 @@ def api_jobs():
             status      = request.args.get("status"),
             platform    = request.args.get("platform"),
             min_score   = request.args.get("min_score", default=60, type=float),
-            limit       = request.args.get("limit",     default=50, type=int),
+            limit       = request.args.get("limit",     default=30, type=int),
         )
         return jsonify(jobs)
     except Exception as e:
@@ -85,7 +85,7 @@ def api_jobs():
 def api_jobs_aiml():
     """Shortcut — AI/ML jobs only."""
     try:
-        return jsonify(get_all_jobs(resume_type="aiml", limit=50))
+        return jsonify(get_all_jobs(resume_type="aiml", limit=30))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -95,7 +95,7 @@ def api_jobs_aiml():
 def api_jobs_devops():
     """Shortcut — DevOps jobs only."""
     try:
-        return jsonify(get_all_jobs(resume_type="devops", limit=50))
+        return jsonify(get_all_jobs(resume_type="devops", limit=30))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -125,6 +125,36 @@ def api_update_status(job_id: int):
     except Exception as e:
         logger.error(f"Update status error: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+# GET /api/run-status
+@app.route("/api/run-status")
+def api_run_status():
+    """
+    Returns the status of the latest scraping run.
+    { status: 'running' | 'done' | 'idle', cycle: N, finished_at: '...' }
+    Used by the frontend to know when new jobs are available.
+    """
+    try:
+        from core.database import get_conn
+        conn = get_conn()
+        cur  = conn.cursor()
+        cur.execute("SELECT * FROM runs ORDER BY id DESC LIMIT 1")
+        row = cur.fetchone()
+        cur.execute("SELECT COUNT(*) as total FROM runs")
+        cnt = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not row:
+            return jsonify({"status": "idle", "cycle": 0, "finished_at": None})
+        return jsonify({
+            "status":      row["status"],          # 'running' or 'done'
+            "cycle":       cnt["total"] if cnt else 1,
+            "finished_at": row["finished_at"],
+        })
+    except Exception as e:
+        logger.error(f"Run-status error: {e}")
+        return jsonify({"status": "idle", "cycle": 0, "finished_at": None})
 
 
 # ── Run ────────────────────────────────────────────────────

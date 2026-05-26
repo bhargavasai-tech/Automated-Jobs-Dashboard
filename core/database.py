@@ -152,7 +152,7 @@ def update_score(job_id: int, result: dict):
     conn.close()
 
 
-def get_all_jobs(status=None, platform=None, resume_type=None, min_score=60, limit=50) -> list:
+def get_all_jobs(status=None, platform=None, resume_type=None, min_score=60, limit=30) -> list:
     """Return scored jobs above min_score with optional filters."""
     conn   = get_conn()
     cur    = conn.cursor()
@@ -217,13 +217,13 @@ def get_stats() -> dict:
         return list(row.values())[0] if row else 0
 
     stats = {
-        "total":   scalar("SELECT COUNT(*) FROM jobs"),
-        "pending": scalar("SELECT COUNT(*) FROM jobs WHERE status = 'pending'"),
+        "total":   scalar("SELECT COUNT(*) FROM jobs WHERE score >= 60"),
+        "pending": scalar("SELECT COUNT(*) FROM jobs WHERE status = 'pending' AND score >= 60"),
         "applied": scalar("SELECT COUNT(*) FROM jobs WHERE status = 'applied'"),
-        "skipped": scalar("SELECT COUNT(*) FROM jobs WHERE status = 'skipped'"),
-        "urgent":  scalar("SELECT COUNT(*) FROM jobs WHERE score_bucket = 'urgent'"),
-        "aiml":    scalar("SELECT COUNT(*) FROM jobs WHERE resume_used = 'aiml' AND score IS NOT NULL"),
-        "devops":  scalar("SELECT COUNT(*) FROM jobs WHERE resume_used = 'devops' AND score IS NOT NULL"),
+        "skipped": scalar("SELECT COUNT(*) FROM jobs WHERE status = 'skipped' AND score >= 60"),
+        "urgent":  scalar("SELECT COUNT(*) FROM jobs WHERE score >= 85"),
+        "aiml":    scalar("SELECT COUNT(*) FROM jobs WHERE resume_used = 'aiml' AND score >= 60"),
+        "devops":  scalar("SELECT COUNT(*) FROM jobs WHERE resume_used = 'devops' AND score >= 60"),
     }
     cur.close()
     conn.close()
