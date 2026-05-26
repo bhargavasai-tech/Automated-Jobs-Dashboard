@@ -375,7 +375,6 @@
         }, 100);
 
         setTimeout(() => {
-            loadStats();
             loadJobs();
             // Show the button and start polling for new cycles
             document.getElementById('new-jobs-btn').style.display = 'flex';
@@ -459,8 +458,8 @@
         label.textContent = 'Loading...';
         badge.style.display = 'none';
 
-        // Re-fetch both stats and jobs
-        Promise.all([loadStats(), loadJobsAndReturn()])
+        // Re-fetch jobs (which automatically recalculates stats)
+        loadJobsAndReturn()
             .then(() => {
                 // Back to idle / up-to-date state
                 btn.className = 'btn-disabled interactive';
@@ -503,33 +502,27 @@
                     recommendation: job.recommendation || ''
                 }));
                 applyFilters();
+                loadStats();
                 updateInteractiveListeners();
             });
     }
 
-    // ── Load Stats from Flask API ────────────────────────
+    // ── Calculate Stats Dynamically on Frontend ──────────
     function loadStats() {
-        fetch('/api/stats')
-            .then(r => r.json())
-            .then(data => {
-                const stats = [
-                    { label: "TOTAL JOBS",      value: data.total   || 0, icon: "radar",                color: "#000000" },
-                    { label: "HIGH MATCH 85%+", value: data.urgent  || 0, icon: "verified",             color: "#007BFF" },
-                    { label: "AI / ML JOBS",    value: data.aiml    || 0, icon: "smart_toy",            color: "#7C3AED" },
-                    { label: "DEVOPS JOBS",     value: data.devops  || 0, icon: "cloud",                color: "#0EA5E9" },
-                    { label: "APPLIED",         value: data.applied || 0, icon: "assignment_turned_in", color: "#16A34A" }
-                ];
-                renderStats(stats);
-            })
-            .catch(err => {
-                console.error('Stats fetch failed:', err);
-                renderStats([
-                    { label: "TOTAL JOBS",      value: 0, icon: "radar",                color: "#000000" },
-                    { label: "HIGH MATCH 85%+", value: 0, icon: "verified",             color: "#007BFF" },
-                    { label: "APPLIED",         value: 0, icon: "assignment_turned_in", color: "#000000" },
-                    { label: "PENDING REVIEW",  value: 0, icon: "analytics",            color: "#000000" }
-                ]);
-            });
+        const total   = allJobs.length;
+        const urgent  = allJobs.filter(j => j.match >= 85).length;
+        const aiml    = allJobs.filter(j => j.type === 'AI/ML').length;
+        const devops  = allJobs.filter(j => j.type === 'DevOps').length;
+        const applied = allJobs.filter(j => j.applied === true).length;
+
+        const stats = [
+            { label: "TOTAL JOBS",      value: total,   icon: "radar",                color: "#000000" },
+            { label: "HIGH MATCH 85%+", value: urgent,  icon: "verified",             color: "#007BFF" },
+            { label: "AI / ML JOBS",    value: aiml,    icon: "smart_toy",            color: "#7C3AED" },
+            { label: "DEVOPS JOBS",     value: devops,  icon: "cloud",                color: "#0EA5E9" },
+            { label: "APPLIED",         value: applied, icon: "assignment_turned_in", color: "#16A34A" }
+        ];
+        renderStats(stats);
     }
 
     // ── Load Jobs from Flask API ─────────────────────────
@@ -587,7 +580,7 @@ function loadJobs() {
             }));
 
             applyFilters();
-
+            loadStats();
             updateInteractiveListeners();
         })
 
