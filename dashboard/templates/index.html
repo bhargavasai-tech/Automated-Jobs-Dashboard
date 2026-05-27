@@ -728,7 +728,7 @@ function loadJobs() {
             return matchesSearch && matchesFilter;
         });
         renderJobs(filtered);
-        loadStats(filtered);
+        loadStats(allJobs);
     }
 
     document.getElementById('job-search').addEventListener('input', (e) => {
