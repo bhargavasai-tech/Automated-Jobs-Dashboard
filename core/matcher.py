@@ -139,7 +139,7 @@ def _build_prompt(job: dict, resume_text: str) -> str:
     return f"""You are a technical recruiter AI scoring a job match for a fresher candidate.
 
 CANDIDATE RESUME:
-{resume_text[:1500]}
+{resume_text[:4000]}
 
 JOB DETAILS:
 Title: {job.get('title', '')}
@@ -368,7 +368,7 @@ def score_all(jobs: list[dict], max_per_cycle: int = 30) -> list[dict]:
                 job.update(result)
                 scored.append(job)
                 rate_limit_hits = 0          # reset on success
-                time.sleep(5)                # ~10 req/min, safe under 20k TPM
+                time.sleep(15)               # sleep 15s to be absolutely safe under Groq free tier limits
             elif result == "SKIP":
                 pass                         # deliberate skip — don't penalise quota counter
             else:                            # None = actual API/rate-limit failure

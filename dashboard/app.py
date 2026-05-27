@@ -62,7 +62,7 @@ def api_stats():
 #   status      = pending | applied | skipped
 #   platform    = linkedin | shine | internshala
 #   min_score   = float  (default 60)
-#   limit       = int    (default 30)
+#   limit       = int    (default 50)
 @app.route("/api/jobs")
 def api_jobs():
     """All jobs with optional filters."""
@@ -72,7 +72,7 @@ def api_jobs():
             status      = request.args.get("status"),
             platform    = request.args.get("platform"),
             min_score   = request.args.get("min_score", default=60, type=float),
-            limit       = request.args.get("limit",     default=30, type=int),
+            limit       = request.args.get("limit",     default=50, type=int),
         )
         return jsonify(jobs)
     except Exception as e:
@@ -85,7 +85,7 @@ def api_jobs():
 def api_jobs_aiml():
     """Shortcut — AI/ML jobs only."""
     try:
-        return jsonify(get_all_jobs(resume_type="aiml", limit=30))
+        return jsonify(get_all_jobs(resume_type="aiml", limit=50))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -95,7 +95,7 @@ def api_jobs_aiml():
 def api_jobs_devops():
     """Shortcut — DevOps jobs only."""
     try:
-        return jsonify(get_all_jobs(resume_type="devops", limit=30))
+        return jsonify(get_all_jobs(resume_type="devops", limit=50))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

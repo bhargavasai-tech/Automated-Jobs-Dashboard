@@ -152,7 +152,7 @@ def update_score(job_id: int, result: dict):
     conn.close()
 
 
-def get_all_jobs(status=None, platform=None, resume_type=None, min_score=60, limit=30) -> list:
+def get_all_jobs(status=None, platform=None, resume_type=None, min_score=60, limit=50) -> list:
     """Return scored jobs above min_score with optional filters."""
     conn   = get_conn()
     cur    = conn.cursor()
@@ -168,8 +168,20 @@ def get_all_jobs(status=None, platform=None, resume_type=None, min_score=60, lim
     if min_score is not None:
         where.append("score >= %s"); params.append(min_score)
 
+    # Hide stale pending jobs (older than 24 hrs) — position likely already filled.
+    # Applied / skipped jobs are exempt — always kept in history.
+    if not status:  # only apply when no explicit status filter is requested
+        where.append(
+            "(status != 'pending' OR scraped_at::timestamp >= NOW() - INTERVAL '24 hours')"
+        )
+
     query = "SELECT * FROM jobs WHERE " + " AND ".join(where)
-    query += " ORDER BY score DESC, scraped_at DESC"
+    query += """
+        ORDER BY
+            CASE WHEN status = 'pending' THEN 0 ELSE 1 END,
+            score DESC,
+            scraped_at DESC
+    """
     if limit:
         query += " LIMIT %s"; params.append(limit)
 

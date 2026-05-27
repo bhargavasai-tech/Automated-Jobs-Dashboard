@@ -16,7 +16,7 @@ scoring:
 
 scraping:
   interval_minutes: 30
-  max_jobs_per_query: 10
+  max_jobs_per_query: 20
   posted_within_hours: 24
   queries:
     aiml:
@@ -25,12 +25,20 @@ scraping:
       - junior AI engineer india
       - fresher data scientist hyderabad
       - entry level NLP engineer india
+      - fresher python developer hyderabad
+      - entry level computer vision engineer india
+      - junior data engineer hyderabad
     devops:
       - fresher devops engineer hyderabad
       - junior cloud engineer india
       - entry level AWS engineer hyderabad
       - fresher site reliability engineer india
       - junior kubernetes engineer india
+      - fresher cloud engineer india
+      - junior docker kubernetes engineer india
+      - entry level linux engineer hyderabad
+      - fresher CI CD engineer india
+      - junior terraform engineer india
 
 blacklist:
   companies:
