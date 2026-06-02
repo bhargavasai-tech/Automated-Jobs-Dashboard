@@ -33,7 +33,7 @@ def run_cycle():
     run_id = start_run()
 
     # ── Step 1: Scrape ─────────────────────────────────────
-    logger.info("🕷  Scraping jobs from Naukri + LinkedIn...")
+    logger.info("🕷  Scraping jobs from LinkedIn...")
     jobs = scrape_all(queries=QUERIES)
     logger.info(f"   Found {len(jobs)} jobs after filtering")
 

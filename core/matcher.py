@@ -352,7 +352,7 @@ def _round_robin_select(jobs: list[dict], per_source: int, total: int) -> list[d
     return selected[:total]
 
 
-def score_all(jobs: list[dict], max_per_cycle: int = 30) -> list[dict]:
+def score_all(jobs: list[dict], max_per_cycle: int = 50) -> list[dict]:
     # Round-robin: 5 jobs per source per round, up to max_per_cycle total
     jobs  = _round_robin_select(jobs, per_source=5, total=max_per_cycle)
     scored = []
