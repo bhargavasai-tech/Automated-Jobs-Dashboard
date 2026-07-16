@@ -17,7 +17,7 @@ scoring:
 scraping:
   interval_minutes: 30
   max_jobs_per_query: 20
-  posted_within_hours: 168
+  posted_within_hours: 24
   queries:
     aiml:
       - fresher machine learning engineer hyderabad
