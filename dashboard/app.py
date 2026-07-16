@@ -21,9 +21,10 @@ CORS(app)   # allow any origin — fine for a personal project
 
 
 # ── Init DB once at startup ────────────────────────────────
-@app.before_request
-def _ensure_db():
+try:
     init_db()
+except Exception as e:
+    logger.error(f"Failed to initialize database: {e}")
 
 
 # ── UI ─────────────────────────────────────────────────────
