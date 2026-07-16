@@ -251,9 +251,7 @@
         .parallax-init { opacity: 0; transform: translateY(-10px); }
     </style>
 </head>
-<body class="min-h-screen text-on-background font-body-md cursor-none">
-<div class="cursor-dot" id="cursor-dot"></div>
-<div class="cursor-outline" id="cursor-outline"></div>
+<body class="min-h-screen text-on-background font-body-md">
 <header class="header-bg sticky top-0 z-50 border-b border-white/10 parallax-init" id="main-header">
 <div class="flex justify-between items-center w-full px-margin-desktop max-w-container-max mx-auto h-16">
 <div class="flex items-center gap-base">
@@ -342,13 +340,7 @@
     let _cycleCheckTimer  = null;
     let _newCycleReady    = false;
 
-    // Cursor Logic (unchanged)
-    const dot = document.getElementById('cursor-dot');
-    const outline = document.getElementById('cursor-outline');
-    window.addEventListener('mousemove', (e) => {
-        dot.style.transform = `translate(${e.clientX - 3}px, ${e.clientY - 3}px)`;
-        outline.animate({ transform: `translate(${e.clientX - 15}px, ${e.clientY - 15}px)` }, { duration: 400, fill: "forwards", easing: "cubic-bezier(0.16, 1, 0.3, 1)" });
-    });
+    // Custom cursor disabled
 
     // Magnetic Search Logic (unchanged)
     const searchWrap = document.getElementById('search-magnetic-container');
@@ -366,18 +358,8 @@
         searchIcon.style.transform = `translate(0, -50%)`;
     });
 
-    // Cursor Hover Logic (unchanged)
-    const updateInteractiveListeners = () => {
-        document.querySelectorAll('button, a, .interactive, .hover-card, input').forEach(el => {
-            el.addEventListener('mouseenter', () => document.body.classList.add('cursor-active'));
-            el.addEventListener('mouseleave', () => document.body.classList.remove('cursor-active'));
-        });
-        const searchInputEl = document.querySelector('.interactive-search');
-        if (searchInputEl) {
-            searchInputEl.addEventListener('mouseenter', () => document.body.classList.add('cursor-search'));
-            searchInputEl.addEventListener('mouseleave', () => document.body.classList.remove('cursor-search'));
-        }
-    };
+    // Cursor Hover Logic disabled
+    const updateInteractiveListeners = () => {};
 
     // ── Initial Load — fetch real data ───────────────────
     window.addEventListener('DOMContentLoaded', () => {
